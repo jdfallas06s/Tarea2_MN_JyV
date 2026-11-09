@@ -3,7 +3,15 @@ Herramienta de programación lineal (2 variables, 3 restricciones)
 Método simplex (Gran M) y método gráfico.
 
 IF0017 – Métodos Numéricos y Análisis Computacional · Tarea II · II Ciclo 2026
+Johagen David Fallas Sibaja - C4F038
+María Victoria Villalobos Fallas - C4K977
+
 Ejecutar con:   streamlit run app.py
+
+Este archivo solo arma la interfaz. La matemática está en:
+  simplex.py  -> método simplex (Gran M)
+  grafico.py  -> método gráfico y comparación
+Streamlit recalcula cada vez que se cambia un dato
 """
 from fractions import Fraction as F
 
@@ -11,12 +19,12 @@ import pandas as pd
 import streamlit as st
 
 import grafico
-from simplex import (Problema, fbm, fnum, resolver, sistema_texto, subindice,
+from simplex import (Problema, clasificar, fbm, fnum, resolver, sistema_texto, subindice,
                      texto_restriccion, valor_objetivo)
 
 st.set_page_config(page_title="Programación lineal", layout="centered")
 
-# Estilo mínimo: contenedor más angosto, títulos discretos y sin barra superior de Streamlit.
+# Estilo más minimalista
 st.markdown("""
 <style>
 #MainMenu, footer, header[data-testid="stHeader"] { visibility: hidden; height: 0; }
@@ -27,78 +35,27 @@ h3 { font-size: 1.05rem; font-weight: 600; }
 </style>
 """, unsafe_allow_html=True)
 
-# ----------------------------------------------------------------------------
-# Ejemplos (sirven también como problemas de verificación)
-# ----------------------------------------------------------------------------
+# Ejemplos precargados (Tomados de la presentacón Programación Lineal)
+
 EJEMPLOS = {
-    "— Problema propio —": None,
-    "1. Maximización (solo holguras)": dict(
-        sentido="Maximizar", c=(3, 5),
-        r=[(1, 0, "≤", 4), (0, 2, "≤", 12), (3, 2, "≤", 18)]),
-    "2. Minimización (superávit + artificiales)": dict(
-        sentido="Minimizar", c=(2, 3),
-        r=[(1, 1, "≥", 4), (1, 3, "≥", 6), (1, 0, "≤", 5)]),
-    "3. Variables artificiales (≤, = y ≥)": dict(
-        sentido="Minimizar", c=(0.4, 0.5),
-        r=[(0.3, 0.1, "≤", 2.7), (0.5, 0.5, "=", 6), (0.6, 0.4, "≥", 6)]),
-    "4. Infactible (maximizar)": dict(
-        sentido="Maximizar", c=(1, 1),
-        r=[(1, 1, "≤", 2), (1, 1, "≥", 5), (1, 0, "≤", 10)]),
-    "5. No acotado (maximizar)": dict(
-        sentido="Maximizar", c=(1, 1),
-        r=[(1, -1, "≤", 2), (0, 1, "≥", 1), (1, 1, "≥", 1)]),
-    "6. Óptimos alternativos (maximizar)": dict(
-        sentido="Maximizar", c=(2, 4),
-        r=[(1, 2, "≤", 8), (1, 0, "≤", 6), (0, 1, "≤", 3)]),
-    "7. Infactible (minimizar)": dict(
-        sentido="Minimizar", c=(2, 3),
-        r=[(1, 1, "≤", 4), (1, 1, "≥", 6), (1, 0, "≤", 10)]),
-    "8. No acotado (minimizar)": dict(
-        sentido="Minimizar", c=(-2, -1),
-        r=[(1, -1, "≤", 3), (1, 0, "≥", 1), (0, 1, "≥", 0)]),
-    "9. Óptimos alternativos (minimizar)": dict(
-        sentido="Minimizar", c=(1, 1),
-        r=[(1, 1, "≥", 4), (1, 0, "≤", 3), (0, 1, "≤", 3)]),
-    # --- Presentación de clase ---
-    "Clase 1. Procesamiento de gas": dict(
-        sentido="Maximizar", c=(150, 175),
-        r=[(7, 11, "≤", 77), (10, 8, "≤", 80), (0, 1, "≤", 6)]),          # sin x₁ ≤ 9 (redundante)
-    "Clase 2. Dieta Ozark Farms": dict(
-        sentido="Minimizar", c=(0.3, 0.9),
-        r=[(1, 1, "≥", 800), (21, -30, "≤", 0), (-3, 1, "≤", 0)]),
-    "Clase 3. Método M adicional": dict(
-        sentido="Minimizar", c=(4, 1),
-        r=[(3, 1, "=", 3), (4, 3, "≥", 6), (1, 2, "≤", 4)]),
-    "Clase 4. Dualidad: primal del Ejemplo 3": dict(
-        sentido="Maximizar", c=(3, 5),
-        r=[(1, 2, "≤", 8), (3, 1, "≤", 9), (1, 1, "≤", 10)]),             # 3.ª restricción redundante
-    "Clase 5. Dualidad: dual del Ejemplo 3": dict(
-        sentido="Minimizar", c=(8, 9),
-        r=[(1, 3, "≥", 3), (2, 1, "≥", 5), (1, 1, "≤", 10)]),             # 3.ª restricción redundante
-    "Práctica 1": dict(
-        sentido="Maximizar", c=(2, 3),
-        r=[(1, 3, "≤", 6), (3, 2, "≤", 6), (1, 1, "≤", 10)]),             # 3.ª restricción redundante
-    "Práctica 4. Productos A y B": dict(
-        sentido="Maximizar", c=(45, 20),
-        r=[(20, 5, "≤", 9500), (0.04, 0.12, "≤", 40), (1, 1, "≤", 550)]),
-    "Práctica 5": dict(
+    "Problema propio": None,
+    "1. Maximización · solo holguras (Ejercicio 5 de la practica)": dict(
         sentido="Maximizar", c=(6, 8),
         r=[(5, 2, "≤", 40), (6, 6, "≤", 60), (2, 4, "≤", 32)]),
-    "Práctica 7. Método M (maximizar)": dict(
-        sentido="Maximizar", c=(4, 1),
+    "2. Minimización · superávit + artificial (Ejemplo 2 Ozark Farms)": dict(
+        sentido="Minimizar", c=(0.3, 0.9),
+        r=[(1, 1, "≥", 800), (21, -30, "≤", 0), (-3, 1, "≤", 0)]),
+    "3. Minimización · método M con =, ≥ y ≤ (Ejemplo Método M)": dict(
+        sentido="Minimizar", c=(4, 1),
         r=[(3, 1, "=", 3), (4, 3, "≥", 6), (1, 2, "≤", 4)]),
-    "Práctica 8a. Lado derecho negativo": dict(
-        sentido="Maximizar", c=(-5, 2),
-        r=[(-1, 1, "≤", -2), (2, 3, "≤", 5), (1, 1, "≤", 10)]),          # 3.ª restricción redundante
-    # --- Libro (Taha) ---
-    "Libro. Reddy Mikks": dict(
-        sentido="Maximizar", c=(5, 4),
-        r=[(6, 4, "≤", 24), (1, 2, "≤", 6), (-1, 1, "≤", 1)]),            # sin x₂ ≤ 2 (redundante)
 }
+PROPIO = "Problema propio"
+PRIMER_EJEMPLO = list(EJEMPLOS)[1]
 SIGNO = {"≤": "<=", "≥": ">=", "=": "="}
 
 
 def cargar_ejemplo(nombre):
+    """Copia los datos de un ejemplo a los campos del formulario (a través de session_state)."""
     ej = EJEMPLOS[nombre]
     if ej is None:
         return
@@ -109,18 +66,16 @@ def cargar_ejemplo(nombre):
         st.session_state[f"s{i}"], st.session_state[f"b{i}"] = s, float(b)
 
 
-PROPIO = "— Problema propio —"
-
-
 def a_propio():
-    """Si el usuario modifica un dato, el problema deja de ser el ejemplo cargado."""
+    """Si el usuario modifica un dato, el problema deja de ser el ejemplo cargado"""
     st.session_state["ejemplo"] = PROPIO
 
 
 if "sentido" not in st.session_state:
-    cargar_ejemplo("1. Maximización (solo holguras)")
+    cargar_ejemplo(PRIMER_EJEMPLO)
 
 
+# Los number_input entregan float; se convierten a Fraction para que el simplex sea exacto.
 def frac(v):
     """float del widget -> Fraction exacta (0.3 -> 3/10)."""
     return F(str(round(float(v), 10)))
@@ -134,9 +89,7 @@ def mostrar_df(df):
         st.dataframe(df, use_container_width=True)
 
 
-# ----------------------------------------------------------------------------
-# LaTeX del modelo
-# ----------------------------------------------------------------------------
+# LaTeX del modelo (solo para mostrar la formulación con st.latex)
 def lx(v):
     v = F(v)
     if v.denominator == 1:
@@ -166,13 +119,13 @@ def latex_modelo(p: Problema):
     return r"\begin{aligned}" + r" \\ ".join(lineas) + r"\end{aligned}"
 
 
-# ----------------------------------------------------------------------------
-# Tablas simplex
-# ----------------------------------------------------------------------------
+
+# Tablas simplex: convierte una Tabla en un DataFrame de pandas y resalta
+# la columna de entrada (azul), la fila de salida (beige) y el pivote (verde)
 def tabla_df(T, nombres, dec, razones=None, col=None, fila=None):
     datos = [[fbm(v, dec) for v in T.z]] + [[fnum(v, dec) for v in f] for f in T.filas]
     indice = ["Z"] + [f"F{i + 1}: {nombres[b]}" for i, b in enumerate(T.base)]
-    df = pd.DataFrame(datos, index=indice, columns=list(nombres) + ["LD"])
+    df = pd.DataFrame(datos, index=indice, columns=list(nombres) + ["Solución"])
     if razones is not None:
         df["Razón"] = ["—"] + [fnum(r, dec) if r is not None else "—" for r in razones]
 
@@ -189,9 +142,7 @@ def tabla_df(T, nombres, dec, razones=None, col=None, fila=None):
     return df.style.apply(estilo, axis=None)
 
 
-# ----------------------------------------------------------------------------
 # Encabezado y datos de entrada
-# ----------------------------------------------------------------------------
 st.title("Programación lineal: simplex y método gráfico")
 st.caption("IF0017 · Métodos Numéricos y Análisis Computacional · Tarea II · II Ciclo 2026")
 
@@ -215,6 +166,7 @@ for i in range(1, 4):
     k[2].selectbox(f"Signo (R{i})", ["≤", "≥", "="], key=f"s{i}", on_change=a_propio)
     k[3].number_input(f"b (R{i})", key=f"b{i}", step=1.0, format="%g", on_change=a_propio)
 
+# Se leen los valores del formulario y se arma el problema que se resuelve
 problema = Problema(
     "max" if st.session_state["sentido"] == "Maximizar" else "min",
     (frac(st.session_state["c1"]), frac(st.session_state["c2"])),
@@ -227,17 +179,33 @@ st.latex(latex_modelo(problema))
 
 dec = st.radio("Mostrar números como", ["Fracciones exactas", "Decimales"], horizontal=True) == "Decimales"
 
-resultado = resolver(problema, dec=dec)
-analisis = grafico.analizar(problema)
+resultado = resolver(problema, dec=dec)     # metodo simplex (simplex.py)
+analisis = grafico.analizar(problema)        # metodo gráfico: vertices y optimo (grafico.py)
 sd = resultado.estandar
+
+with st.container(border=True):
+    st.markdown("**Clasificación del problema**")
+    for linea in clasificar(problema, resultado):
+        st.markdown(f"- {linea}")
+
+
+def mostrar_comparacion():
+    """Tabla simplex vs método gráfico; se muestra al inicio de cada pestaña."""
+    comp = grafico.comparar(resultado, analisis)
+    st.markdown("**Simplex vs. método gráfico**")
+    st.table(pd.DataFrame(comp["filas"]).set_index("Método"))
+    if comp["coinciden"]:
+        st.markdown("Ambos métodos coinciden.")
+    else:
+        st.error("Los métodos no coinciden: revisar el modelo.")
+
 
 tab_simplex, tab_grafico, tab_resultados = st.tabs(
     ["2. Simplex", "3. Método gráfico", "4. Resultados"])
 
-# ----------------------------------------------------------------------------
 # 2. Simplex
-# ----------------------------------------------------------------------------
 with tab_simplex:
+    mostrar_comparacion()
     st.subheader("Forma estándar")
     st.markdown(
         "- **≤**: se suma una variable de **holgura** sᵢ, que es la básica inicial.\n"
@@ -283,7 +251,7 @@ with tab_simplex:
             st.warning(f"No hay coeficientes positivos en la columna de {sd.nombres[col]}: no se puede "
                        f"calcular ninguna razón. El problema es no acotado (o infactible, ver resultados).")
             break
-        st.markdown(f"- **Razones** (LD ÷ coeficiente, solo coeficientes > 0): la menor está en F{fila + 1}.")
+        st.markdown(f"- **Razones** (Solución ÷ coeficiente, solo coeficientes > 0): la menor está en F{fila + 1}.")
         st.markdown(f"- **Sale:** {sd.nombres[paso['sale']]} · **Pivote:** {fnum(paso['pivote'], dec)} "
                     f"(F{fila + 1}, columna {sd.nombres[col]}).")
         if paso["ops"]:
@@ -297,6 +265,7 @@ with tab_simplex:
 # 3. Método gráfico
 # ----------------------------------------------------------------------------
 with tab_grafico:
+    mostrar_comparacion()
     st.subheader("Región factible y solución óptima")
     if analisis["estado"] == "infactible":
         st.error("La región factible es vacía: ningún punto cumple todas las restricciones.")
@@ -312,34 +281,17 @@ with tab_grafico:
                           "Óptimo": "★" if es_opt else ""})
         mostrar_df(pd.DataFrame(filas).set_index("Vértice"))
 
-    st.markdown("**Comparación con el simplex**")
-    if analisis["estado"] == "optimo":
-        if len(analisis["optimos"]) > 1:
-            st.markdown("Varios vértices dan el mismo valor óptimo: hay infinitas soluciones óptimas "
-                        "(todo el segmento que los une).")
-        if resultado.estado == "optimo":
-            zg, zs = analisis["z_opt"], float(resultado.z)
-            st.markdown(f"- Método gráfico: Z = **{zg:.6g}**\n- Método simplex: Z = **{zs:.6g}**")
-            if abs(zs - zg) < 1e-7 * max(1, abs(zs)):
-                st.markdown("Ambos métodos coinciden.")
-            else:
-                st.error("Los resultados no coinciden: revisar el modelo.")
-        else:
-            st.error("Los métodos no coinciden en el estado del problema; revisar el modelo.")
-    elif analisis["estado"] == "no_acotado":
+    if analisis["estado"] == "no_acotado":
         st.markdown("La región factible no está acotada y Z mejora indefinidamente: no hay óptimo finito.")
-        if resultado.estado != "no_acotado":
-            st.error("El simplex no reporta el mismo estado; revisar el modelo.")
-    else:
-        if resultado.estado == "infactible":
-            st.markdown("Ambos métodos coinciden: el problema es infactible.")
-        else:
-            st.error("El simplex no reporta el mismo estado; revisar el modelo.")
+    elif analisis["estado"] == "optimo" and len(analisis["optimos"]) > 1:
+        st.markdown("Varios vértices dan el mismo valor óptimo: hay infinitas soluciones óptimas "
+                    "(todo el segmento que los une).")
 
 # ----------------------------------------------------------------------------
 # 4. Resultados
 # ----------------------------------------------------------------------------
 with tab_resultados:
+    mostrar_comparacion()
     st.subheader("Resultado")
     if resultado.estado == "optimo":
         v = resultado.valores

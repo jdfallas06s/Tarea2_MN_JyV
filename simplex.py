@@ -1,10 +1,13 @@
 """
-Núcleo del método simplex (método de la Gran M) para programación lineal
+Método simplex (método de la Gran M) para programación lineal
 con dos variables de decisión y tres restricciones.
 
-Todo el procedimiento está implementado explícitamente (sin linprog ni similares)
-y usa aritmética exacta con fracciones. Los números de la fila Z tienen la forma
-a + b·M, donde M es un número positivo arbitrariamente grande.
+IF0017 – Métodos Numéricos y Análisis Computacional · Tarea II · II Ciclo 2026
+Johagen David Fallas Sibaja - C4F038
+María Victoria Villalobos Fallas - C4K977
+
+Nota: Los números de la fila Z tienen la forma a + b·M,
+donde M es un número positivo arbitrariamente grande.
 """
 from __future__ import annotations
 
@@ -21,9 +24,7 @@ def subindice(i):
     return "".join(SUB[ch] for ch in str(i))
 
 
-# ----------------------------------------------------------------------------
 # Números de la forma a + bM
-# ----------------------------------------------------------------------------
 class BM:
     """Número a + b·M (M = constante positiva muy grande). Inmutable."""
 
@@ -67,9 +68,7 @@ def _bm(x):
     return x if isinstance(x, BM) else BM(x)
 
 
-# ----------------------------------------------------------------------------
 # Formato de números
-# ----------------------------------------------------------------------------
 def fnum(x, dec=False, nd=4):
     """Formatea una fracción: como fracción exacta o como decimal."""
     if not dec:
@@ -128,9 +127,8 @@ def texto_restriccion(a1, a2, signo, b, dec=False):
     return f"{texto_lineal(a1, a2, dec)} {SIGNOS_UNICODE[signo]} {fnum(b, dec)}"
 
 
-# ----------------------------------------------------------------------------
+
 # Modelo del problema
-# ----------------------------------------------------------------------------
 @dataclass
 class Problema:
     sentido: str                      # "max" o "min"
@@ -170,9 +168,7 @@ def hay_region_factible(p: Problema) -> bool:
     return False
 
 
-# ----------------------------------------------------------------------------
 # Tabla simplex
-# ----------------------------------------------------------------------------
 @dataclass
 class Tabla:
     z: list                 # fila Z: n+1 elementos BM (última = lado derecho)
@@ -289,9 +285,7 @@ def sistema_texto(sd: Estandar, dec=False):
     return lineas
 
 
-# ----------------------------------------------------------------------------
 # Algoritmo simplex
-# ----------------------------------------------------------------------------
 @dataclass
 class Resultado:
     estado: str                          # "optimo", "no_acotado", "infactible"
@@ -432,11 +426,3 @@ def clasificar(p: Problema, res: Resultado) -> list:
 
     return [f"**Tipo:** {tipo}", f"**Variables añadidas:** {forma}", f"**Resultado:** {resultado}"]
 
-
-# ----------------------------------------------------------------------------
-# Verificación rápida desde la terminal:  python simplex.py
-# ----------------------------------------------------------------------------
-if __name__ == "__main__":
-    ejemplo = Problema("max", (3, 5), [(1, 0, "<=", 4), (0, 2, "<=", 12), (3, 2, "<=", 18)])
-    r = resolver(ejemplo)
-    print(r.estado, r.z, {k: str(v) for k, v in r.valores.items()})

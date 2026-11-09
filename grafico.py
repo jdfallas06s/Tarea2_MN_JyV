@@ -3,6 +3,11 @@ Método gráfico para programación lineal con dos variables.
 
 analizar(p)  -> vértices factibles, estado del problema y óptimo (aritmética exacta).
 dibujar(p, a) -> figura de matplotlib con rectas, región factible, vértices y óptimo.
+comparar(res, a) -> tabla simplex vs gráfico.
+
+Idea del método gráfico: el óptimo de un problema lineal siempre está en un vértice
+de la región factible. Por eso basta con encontrar los vértices, evaluar Z en cada uno
+y quedarse con el mejor.
 """
 from __future__ import annotations
 
@@ -16,7 +21,7 @@ import numpy as np
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from simplex import Problema, texto_restriccion
+from simplex import Problema, fnum, texto_restriccion
 
 COLORES = ["#1f77b4", "#d6604d", "#2ca02c"]
 
@@ -25,6 +30,7 @@ COLORES = ["#1f77b4", "#d6604d", "#2ca02c"]
 # Análisis (exacto, con fracciones)
 # ----------------------------------------------------------------------------
 def _cumple(p: Problema, x1, x2) -> bool:
+    """¿El punto (x1, x2) cumple x >= 0 y todas las restricciones? (comparación exacta)"""
     if x1 < 0 or x2 < 0:
         return False
     for a1, a2, s, b in p.restricciones:
@@ -35,7 +41,9 @@ def _cumple(p: Problema, x1, x2) -> bool:
 
 
 def _vertices(p: Problema) -> list:
-    """Intersecciones de pares de rectas (restricciones y ejes) que son factibles."""
+    """Intersecciones de pares de rectas (restricciones y ejes) que son factibles.
+    Se resuelve cada sistema 2x2 con la regla de Cramer; las rectas paralelas (det = 0) se omiten.
+    Un punto de intersección es vértice solo si además cumple todas las restricciones."""
     rectas = [(a1, a2, b) for a1, a2, _, b in p.restricciones]
     rectas += [(F(1), F(0), F(0)), (F(0), F(1), F(0))]
     puntos = set()
@@ -51,7 +59,9 @@ def _vertices(p: Problema) -> list:
 
 
 def _rayos(p: Problema) -> list:
-    """Direcciones d >= 0 en las que la región factible no tiene límite."""
+    """Direcciones d >= 0 en las que la región factible no tiene límite.
+    Una dirección es válida si moverse en ella nunca viola una restricción (a·d <= 0 para <=, etc.).
+    Si Z mejora en alguna de ellas, el problema es no acotado."""
     candidatos = [(F(1), F(0)), (F(0), F(1))]
     for a1, a2, _, _ in p.restricciones:
         candidatos += [(a2, -a1), (-a2, a1)]
@@ -79,6 +89,7 @@ def analizar(p: Problema) -> dict:
 
     cx = sum(float(v[0]) for v in vs) / len(vs)
     cy = sum(float(v[1]) for v in vs) / len(vs)
+    # Ordenar los vértices por ángulo alrededor del centro: así V1, V2... recorren el borde de la región
     vs.sort(key=lambda v: math.atan2(float(v[1]) - cy, float(v[0]) - cx))
 
     signo = 1 if p.sentido == "max" else -1
@@ -88,6 +99,7 @@ def analizar(p: Problema) -> dict:
     if mejora:
         return dict(estado="no_acotado", vertices=vertices, optimos=[], z_opt=None, rayos=rayos)
 
+    # Evaluar Z en cada vértice. signo = -1 en minimización, para poder usar siempre "max".
     z = [p.c[0] * x + p.c[1] * y for x, y in vs]
     mejor = max(signo * v for v in z)
     optimos = [vertices[i] for i, v in enumerate(z) if signo * v == mejor]
@@ -118,7 +130,8 @@ def dibujar(p: Problema, a: dict):
     xmax, ymax = _limites(p, a)
     fig, ax = plt.subplots(figsize=(7.5, 5.5))
 
-    # región factible (máscara sobre una malla; sirve también si no está acotada)
+    # Región factible: se evalúan las restricciones en una malla de puntos y se sombrea donde todas se cumplen.
+    # (Sirve también cuando la región no está acotada, a diferencia de dibujar un polígono.)
     X, Y = np.meshgrid(np.linspace(0, xmax, 500), np.linspace(0, ymax, 500))
     mask = np.ones_like(X, dtype=bool)
     tol = 1e-9
@@ -152,7 +165,7 @@ def dibujar(p: Problema, a: dict):
         ax.annotate(f"V{k}", (x, y), textcoords="offset points", xytext=(6, 6), fontsize=9,
                     weight="bold" if es_opt else "normal")
 
-    # óptimo y recta de nivel
+    # Óptimo y recta de nivel: la recta c1·x1 + c2·x2 = Z* pasa por el óptimo y toca la región por última vez
     if a["estado"] == "optimo":
         for j, (x, y) in enumerate(a["optimos"]):
             ax.plot(x, y, "*", color="#e08a00", ms=16, zorder=6, mec="#222",
@@ -182,3 +195,46 @@ def dibujar(p: Problema, a: dict):
         ax.legend(loc="upper right", fontsize=8, framealpha=0.95)
     fig.tight_layout()
     return fig
+
+
+# ----------------------------------------------------------------------------
+# Comparación simplex vs método gráfico
+# ----------------------------------------------------------------------------
+def comparar(res, a: dict) -> dict:
+    """Compara el resultado del simplex (res) con el del método gráfico (a).
+    Coinciden si: ambos dan el mismo estado y, siendo óptimos, el mismo Z y el punto del
+    simplex es uno de los vértices óptimos del gráfico.
+    Devuelve las filas de la tabla comparativa y si ambos métodos coinciden."""
+    nombres = {"optimo": "óptimo", "no_acotado": "no acotado",
+               "infactible": "infactible", "max_iter": "sin convergencia"}
+    sin = "—"
+    filas = []
+
+    if res.estado == "optimo":
+        v = res.valores
+        filas.append({"Método": "Simplex", "x₁": fnum(v["x₁"], True), "x₂": fnum(v["x₂"], True),
+                      "Z": fnum(res.z, True), "Resultado": "óptimo"})
+    else:
+        filas.append({"Método": "Simplex", "x₁": sin, "x₂": sin, "Z": sin,
+                      "Resultado": nombres.get(res.estado, res.estado)})
+
+    if a["estado"] == "optimo":
+        opt = a["optimos"]
+        filas.append({"Método": "Gráfico",
+                      "x₁": " / ".join(fnum(o[0], True) for o in opt),
+                      "x₂": " / ".join(fnum(o[1], True) for o in opt),
+                      "Z": fnum(a["z_opt"], True),
+                      "Resultado": "óptimo" if len(opt) == 1 else "óptimo en " + " y ".join(
+                          f"({fnum(o[0], True)}, {fnum(o[1], True)})" for o in opt)})
+    else:
+        filas.append({"Método": "Gráfico", "x₁": sin, "x₂": sin, "Z": sin,
+                      "Resultado": nombres[a["estado"]]})
+
+    if res.estado == "optimo" and a["estado"] == "optimo":
+        zs, zg = float(res.z), a["z_opt"]
+        px, py = float(res.valores["x₁"]), float(res.valores["x₂"])
+        coinciden = abs(zs - zg) <= 1e-7 * max(1, abs(zs)) and any(
+            abs(px - o[0]) < 1e-7 and abs(py - o[1]) < 1e-7 for o in a["optimos"])
+    else:
+        coinciden = res.estado == a["estado"]
+    return {"filas": filas, "coinciden": coinciden}
