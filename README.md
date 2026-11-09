@@ -9,3 +9,4 @@ Tarea II · IF0017 · II Ciclo 2026.
 - `grafico.py`: método gráfico (vértices, región factible, óptimo).
 - `app.py`: interfaz en Streamlit.
 - `.streamlit/config.toml`: tema de colores.
+- URL Tarea II: https://tarea2mnjyv-flfzugc4bxiv4k6sdbqu5x.streamlit.app/
